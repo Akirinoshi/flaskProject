@@ -1,4 +1,10 @@
-from wtforms import *
+from flask import Flask, request, render_template, flash
+from flask_sqlalchemy import SQLAlchemy
+from wtforms import Form, TextField, validators
+from binance import Client
+
+import config
+import models
 
 
 class RegistrationForm(Form):
@@ -7,7 +13,13 @@ class RegistrationForm(Form):
     secret = TextField('secret', [validators.Length(min=6, max=50)])
 
 
-def register():
+def start():
+    app = Flask(__name__)
+
+    app.config.from_object(config.DevelopmentConfig)
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    db = SQLAlchemy(app)
+
     try:
         form = RegistrationForm(request.form)
 
@@ -16,17 +28,20 @@ def register():
             api = form.api.data
             secret = form.secret.data
 
-            if models.User.query.filter_by(login=login).first() == 'None':
+            if models.User.query.filter_by(login=login).first() is None:
+                client = Client(api, secret)
+                client.get_account_snapshot(type='SPOT')
                 db.session.add(models.User(login, api, secret))
                 db.session.commit()
                 flash('You registered successfully!')
-                return render_template('registration.html', form=form)
+                return render_template('laboratory.html', form=form)
             else:
                 flash('That username is already taken, please choose another')
                 return render_template('registration.html', form=form)
 
     except Exception as e:
-        print(e)
-        return str(e)
+        print(e.__traceback__)
+        flash('Invalid API or Secret Key!')
+        return render_template('registration.html', form=form)
 
     return render_template('registration.html', form=form)
